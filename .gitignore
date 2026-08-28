@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# User music
+music/
+test_music/
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+
+# Generated output
+output/
+data/cache/
+data/analysis/
+.ai_dj_cache/
+.ai_dj_analysis/
+
+# ML artifacts
+*.pt
+*.pth
+*.ckpt
+
+# Experiment artifacts
+experiments/runs/
