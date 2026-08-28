@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-ANALYSIS_VERSION = "1.1"
+from ai_dj.representation.structure import StructureAnalysis
+
+ANALYSIS_VERSION = "2.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +150,7 @@ class TrackAnalysis:
     key: KeyEstimate = KeyEstimate(key=None, confidence=0.0)
     energy: EnergyEstimate = EnergyEstimate(global_level=0.0, timeline=())
     spectral: SpectralFeatures = SpectralFeatures.zero()
+    structure: StructureAnalysis = StructureAnalysis.empty()
     analysis_version: str = ANALYSIS_VERSION
 
     def to_dict(self) -> dict[str, Any]:
@@ -161,6 +164,7 @@ class TrackAnalysis:
             "key": self.key.to_dict(),
             "energy": self.energy.to_dict(),
             "spectral": self.spectral.to_dict(),
+            "structure": self.structure.to_dict(),
             "analysis_version": self.analysis_version,
         }
 
@@ -182,6 +186,9 @@ class TrackAnalysis:
             spectral=SpectralFeatures.from_dict(value["spectral"])
             if "spectral" in value
             else SpectralFeatures.zero(),
+            structure=StructureAnalysis.from_dict(value["structure"])
+            if "structure" in value
+            else StructureAnalysis.empty(),
             analysis_version=str(value["analysis_version"]),
         )
 

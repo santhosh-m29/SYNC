@@ -11,6 +11,7 @@ from ai_dj.analysis.downbeats import estimate_downbeats
 from ai_dj.analysis.energy import estimate_energy
 from ai_dj.analysis.key import estimate_key
 from ai_dj.analysis.spectral import estimate_spectral_features
+from ai_dj.analysis.structure import analyze_structure
 from ai_dj.analysis.tempo import estimate_tempo
 from ai_dj.ingestion.loader import load_audio
 from ai_dj.ingestion.scanner import scan_audio_library
@@ -33,16 +34,19 @@ def analyze_track(source: str | Path) -> TrackAnalysis:
     audio = load_audio(path)
     tempo = estimate_tempo(audio.samples, audio.sample_rate)
     beats = estimate_beats(audio.samples, audio.sample_rate)
+    downbeats = estimate_downbeats(audio.samples, audio.sample_rate, beats)
+    energy = estimate_energy(audio.samples, audio.sample_rate)
     return TrackAnalysis(
         track_id=TrackAnalysis.track_id_for(path),
         source_path=str(path.resolve()),
         duration=round(audio.duration, 6),
         tempo=tempo,
         beats=beats,
-        downbeats=estimate_downbeats(audio.samples, audio.sample_rate, beats),
+        downbeats=downbeats,
         key=estimate_key(audio.samples, audio.sample_rate),
-        energy=estimate_energy(audio.samples, audio.sample_rate),
+        energy=energy,
         spectral=estimate_spectral_features(audio.samples, audio.sample_rate),
+        structure=analyze_structure(audio.samples, audio.sample_rate, audio.duration, downbeats, energy),
         analysis_version=ANALYSIS_VERSION,
     )
 
@@ -68,10 +72,12 @@ def analyze_library(directory: str | Path, cache: AnalysisCache) -> LibraryAnaly
             analysis = analyze_track(path)
             cache.put(path, analysis)
             LOGGER.info(
-                "BPM: %.3f; beats: %d; downbeats: %d; key: %s; energy: %.3f",
+                "BPM: %.3f; beats: %d; downbeats: %d; sections: %d; phrases: %d; key: %s; energy: %.3f",
                 analysis.tempo.bpm,
                 len(analysis.beats.timestamps),
                 len(analysis.downbeats.timestamps),
+                len(analysis.structure.sections),
+                len(analysis.structure.phrases),
                 analysis.key.key or "unknown",
                 analysis.energy.global_level,
             )

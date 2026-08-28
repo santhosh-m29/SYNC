@@ -109,6 +109,7 @@ def test_track_pipeline_populates_all_phase_one_features(tmp_path):
     assert 0.0 <= analysis.energy.global_level <= 1.0
     assert analysis.energy.timeline
     assert len(analysis.spectral.mfcc) == 13
+    assert analysis.structure.vocal_activity.available is False
 
 
 def _accented_click_signal(*, sample_rate: int, meter: int) -> np.ndarray:
