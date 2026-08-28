@@ -40,10 +40,11 @@ def plan_set(
     """Use bounded beam search to find a context-aware, non-rendering set plan."""
     _validate_config(config)
     candidates = _unique_candidates(start_track, candidate_tracks)
+    transition_cache: dict[tuple[str, str], TransitionPlan | None] = {}
     initial = _SearchState((start_track,), (), 0.0)
     beam = [initial]
     for _ in range(config.target_track_count - 1):
-        expanded = [child for state in beam for child in _expand(state, candidates, config)]
+        expanded = [child for state in beam for child in _expand(state, candidates, config, transition_cache)]
         if not expanded:
             break
         beam = sorted(expanded, key=_state_key)[: config.beam_width]
@@ -59,9 +60,10 @@ def plan_set_greedy(
     """Choose the strongest immediate context-aware extension at each step."""
     _validate_config(config)
     candidates = _unique_candidates(start_track, candidate_tracks)
+    transition_cache: dict[tuple[str, str], TransitionPlan | None] = {}
     state = _SearchState((start_track,), (), 0.0)
     for _ in range(config.target_track_count - 1):
-        options = _expand(state, candidates, config)
+        options = _expand(state, candidates, config, transition_cache)
         if not options:
             break
         state = sorted(options, key=_state_key)[0]
@@ -82,12 +84,17 @@ def compare_greedy_and_sequence_aware(
     )
 
 
-def _expand(state: _SearchState, candidates: tuple[TrackAnalysis, ...], config: SetPlanningConfig) -> list[_SearchState]:
+def _expand(
+    state: _SearchState,
+    candidates: tuple[TrackAnalysis, ...],
+    config: SetPlanningConfig,
+    transition_cache: dict[tuple[str, str], TransitionPlan | None],
+) -> list[_SearchState]:
     results: list[_SearchState] = []
     for destination in candidates:
         if not config.allow_track_repeats and destination.track_id in {track.track_id for track in state.tracks}:
             continue
-        plan = _best_eligible_transition(state.tracks[-1], destination)
+        plan = _best_eligible_transition(state.tracks[-1], destination, transition_cache)
         if plan is None:
             continue
         step = _score_step(state.tracks, destination, plan, config)
@@ -95,10 +102,19 @@ def _expand(state: _SearchState, candidates: tuple[TrackAnalysis, ...], config: 
     return results
 
 
-def _best_eligible_transition(source: TrackAnalysis, destination: TrackAnalysis) -> TransitionPlan | None:
+def _best_eligible_transition(
+    source: TrackAnalysis,
+    destination: TrackAnalysis,
+    transition_cache: dict[tuple[str, str], TransitionPlan | None],
+) -> TransitionPlan | None:
+    key = source.track_id, destination.track_id
+    if key in transition_cache:
+        return transition_cache[key]
     for plan in find_best_transitions(source, destination):
         if assess_transition_constraints(source, destination, plan).allowed:
+            transition_cache[key] = plan
             return plan
+    transition_cache[key] = None
     return None
 
 

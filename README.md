@@ -1,10 +1,11 @@
 # AI DJ (SYNC)
 
 SYNC is a local-first foundation for a future general-purpose AI DJ system. The
-current milestone provides deterministic analysis and transition planning: it
+current milestone provides deterministic analysis, planning, and plan-driven
+transition rendering: it
 scans a music directory, extracts rhythmic, harmonic, energy, spectral, and
 structure candidates, then stores a versioned JSON analysis cache. It does not
-yet train models or render transitions.
+does not yet provide a validated learned DJ-ranking model.
 
 ## Deterministic compatibility baseline
 
@@ -44,6 +45,24 @@ to `./music/.ai_dj_analysis`; use `--cache-dir` and `--output-dir` to choose oth
 locations. Unchanged files reuse their cached analysis. Failed files are reported
 while the rest of the batch continues.
 
+## Generate an autonomous set preview
+
+```bash
+python -m ai_dj generate --input ./music --output ./output/set.wav \
+  --tracks 4 --trajectory maintain
+```
+
+Generation reuses the analysis cache, selects a deterministic start track,
+cheaply prefilters a bounded candidate pool, runs the context-aware beam planner,
+renders eligible transitions, and assembles their WAV previews. It writes
+`set.report.json` for machine consumption and `set.report.txt` for a concise
+human-readable sequence and transition summary. `--seed`, candidate-pool size,
+beam width, trajectory, and target track count are recorded in the report.
+
+The generator remains usable without an ML artifact and currently reports that
+deterministic fallback explicitly. A learned model is not used until it is
+validated on a non-empty, leakage-safe, human/consensus-labeled holdout.
+
 ## Current limitations
 
 All musical descriptors are DSP estimates, not musical ground truth. Tempo
@@ -52,8 +71,9 @@ and 4/4 accent patterns and expose confidence; the key estimate is a preliminary
 Western chroma-template feature, and energy is a level proxy rather than a
 perceptual-loudness model. Structure candidates are non-semantic and need not
 correspond to verse/chorus labels. The compatibility and transition systems are
-transparent baselines, not final DJ-set planning. ML and audio rendering remain
-intentionally outside the current milestone.
+transparent baselines. The renderer is an initial preview engine, not a
+production mixer; ML remains an experiment until a valid held-out human-labeled
+dataset exists.
 
 ## Transition candidate planning
 
@@ -128,4 +148,50 @@ light diversity penalty.
 
 The objective is intentionally fixed and inspectable: 65% eligible transition
 score, 20% energy-trajectory fit, and 15% variety. This is a deterministic
-search baseline—not a trained model—and it produces plans only, never audio.
+search baseline—not a trained model.
+
+## Transition rendering
+
+`ai_dj.rendering.render_transition(source, destination, plan, output_path)`
+executes an existing, eligible `TransitionPlan`; it does not choose tracks or
+timestamps. It creates a float WAV preview consisting of source pre-roll,
+plan-duration overlap, and destination post-roll. Supported rendering strategies
+are `phrase_crossfade`, `instrumental_entry`, and `outro_intro`.
+
+Destination audio is pitch-preserving time-stretched with librosa only when the
+residual tempo correction is within ±12% (half/double-time relationships are
+not stretched). Beat-grid offsets may make a bounded ±50 ms destination shift.
+The renderer performs conservative RMS gain matching (at most ±6 dB) and peak
+protection, and returns a `RenderResult` with sample rate, timing, gain, peak,
+RMS, clipping count, stretch rate, and alignment offset. It does not yet apply
+EQ, stems, source separation, or loudness-standard metering.
+
+### Vocal handoff with supplied stems
+
+For a transition that keeps the backing music playing while handing vocals from
+the current song to the next, supply trusted, time-aligned stems for **both**
+tracks:
+
+```python
+from ai_dj.rendering import StemPaths, render_transition
+
+render_transition(
+    source, destination, plan, "output/handoff.wav",
+    source_stems=StemPaths("source-instrumental.wav", "source-vocals.wav"),
+    destination_stems=StemPaths("destination-instrumental.wav", "destination-vocals.wav"),
+)
+```
+
+The renderer maintains the instrumental crossfade, fades the outgoing vocal
+first, then brings in only the destination vocal in the latter portion of the
+overlap. It refuses a one-sided stem request. It does **not** synthesize stems
+from a normal mixed song, because doing that would not reliably leave the beat
+and music untouched.
+
+The assembled set is an ordered sequence of validated transition previews, not
+a full-length mastered DJ mix. The report exposes this limitation along with
+analysis failures, technical checks, fallbacks, and phase timings. Final set
+assembly uses a conservative 20 ms equal-power join and records boundary-jump,
+beat-offset, RMS-range, finite-sample, clipping, and unavailable-artifact
+diagnostics. See [the system audit](docs/SYSTEM_AUDIT.md) for measured baseline
+and improvement evidence, including a 32-track local-library integration run.

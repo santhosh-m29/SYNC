@@ -67,6 +67,24 @@ def test_config_validation_and_greedy_plan():
     assert greedy.search_method == "greedy"
 
 
+def test_beam_search_reuses_pair_transition_results(monkeypatch):
+    import importlib
+
+    module = importlib.import_module("ai_dj.set_planning.planner")
+    original = module.find_best_transitions
+    calls = 0
+
+    def counted(source, destination):
+        nonlocal calls
+        calls += 1
+        return original(source, destination)
+
+    monkeypatch.setattr(module, "find_best_transitions", counted)
+    start, library = _library()
+    plan_set(start, library, SetPlanningConfig(target_track_count=4, beam_width=4))
+    assert calls <= 12  # At most one calculation per directed track pair.
+
+
 def _library():
     start = _with_energy(_track("start", duration=32.0), 0.35)
     return start, [_with_energy(_track("a", duration=32.0), 0.45), _with_energy(_track("b", duration=32.0), 0.65), _with_energy(_track("c", duration=32.0), 0.85)]

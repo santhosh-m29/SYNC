@@ -36,3 +36,25 @@ def test_cli_continues_after_a_bad_file(tmp_path):
 
     assert exit_code == 1
     assert list((music / ".ai_dj_analysis").glob("*.json"))
+
+
+def test_generate_cli_delegates_to_pipeline(monkeypatch, tmp_path):
+    import importlib
+
+    cli = importlib.import_module("ai_dj.cli.main")
+
+    class Result:
+        output_path = tmp_path / "set.wav"
+        report_path = tmp_path / "set.report.json"
+        metrics = {"tracks_selected": 2, "transitions_generated": 1, "average_transition_score": 0.8, "technical_failures": 0}
+
+    captured = {}
+
+    def generate(directory, output, config, **kwargs):
+        captured.update({"directory": directory, "output": output, "config": config, **kwargs})
+        return Result()
+
+    monkeypatch.setattr(cli, "generate_dj_set", generate)
+    assert main(["generate", "--input", str(tmp_path), "--output", str(tmp_path / "set.wav"), "--tracks", "2", "--trajectory", "build"]) == 0
+    assert captured["config"].target_track_count == 2
+    assert captured["config"].energy_trajectory == "build"
