@@ -29,6 +29,8 @@ test_music/
 output/
 data/cache/
 data/analysis/
+data/datasets/
+data/annotations/
 .ai_dj_cache/
 .ai_dj_analysis/
 
