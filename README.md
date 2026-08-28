@@ -166,28 +166,6 @@ protection, and returns a `RenderResult` with sample rate, timing, gain, peak,
 RMS, clipping count, stretch rate, and alignment offset. It does not yet apply
 EQ, stems, source separation, or loudness-standard metering.
 
-### Vocal handoff with supplied stems
-
-For a transition that keeps the backing music playing while handing vocals from
-the current song to the next, supply trusted, time-aligned stems for **both**
-tracks:
-
-```python
-from ai_dj.rendering import StemPaths, render_transition
-
-render_transition(
-    source, destination, plan, "output/handoff.wav",
-    source_stems=StemPaths("source-instrumental.wav", "source-vocals.wav"),
-    destination_stems=StemPaths("destination-instrumental.wav", "destination-vocals.wav"),
-)
-```
-
-The renderer maintains the instrumental crossfade, fades the outgoing vocal
-first, then brings in only the destination vocal in the latter portion of the
-overlap. It refuses a one-sided stem request. It does **not** synthesize stems
-from a normal mixed song, because doing that would not reliably leave the beat
-and music untouched.
-
 The assembled set is an ordered sequence of validated transition previews, not
 a full-length mastered DJ mix. The report exposes this limitation along with
 analysis failures, technical checks, fallbacks, and phase timings. Final set

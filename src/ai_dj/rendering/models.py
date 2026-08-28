@@ -15,20 +15,6 @@ class RenderConfig:
     maximum_gain_db: float = 6.0
     peak_ceiling: float = 0.98
     maximum_beat_alignment_seconds: float = 0.05
-    source_vocal_release_fraction: float = 0.45
-    destination_vocal_entry_fraction: float = 0.45
-
-
-@dataclass(frozen=True, slots=True)
-class StemPaths:
-    """Trusted, time-aligned source files for instrumental and vocal layers.
-
-    These must be genuine stems from the same master, not estimates derived
-    from the mixed track by this renderer.
-    """
-
-    instrumental_path: Path | str
-    vocal_path: Path | str
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,5 +33,3 @@ class RenderResult:
     peak: float
     rms: float
     clipping_samples: int
-    vocal_handoff_applied: bool = False
-    destination_vocal_entry_seconds: float | None = None
