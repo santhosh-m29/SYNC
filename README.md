@@ -83,3 +83,49 @@ those groups from crossing train/validation/test splits. Human evaluation forms
 can be exported/imported with the annotation helpers; imported human or
 consensus labels are returned as new examples and never overwrite the automatic
 artifact in place.
+
+## ML ranking and evaluation
+
+`ai_dj.models.train_transition_quality_model(dataset_dir, artifact_dir)` trains
+a `HistGradientBoostingRegressor` for the continuous `[0, 1]`
+`transition_quality` target using the predefined dataset splits—never a random
+reshuffle. It writes a non-overwriting versioned artifact with `model.pkl`,
+`metrics.json`, and `MODEL_CARD.md`; `predict_transition_quality` uses the same
+feature preparation at inference.
+
+The evaluator reports MAE, RMSE, and Pearson correlation for the learned model
+and deterministic plan-score baseline. Automatic labels are generated from that
+same plan score, so the deterministic baseline has zero error by construction;
+such data cannot demonstrate ML improvement. Meaningful comparisons require
+human/consensus labels on diverse, group-safe held-out tracks.
+
+See [the model card](docs/TRANSITION_QUALITY_MODEL_CARD.md) for intended use,
+evaluation requirements, and limitations.
+
+`ai_dj.evaluation.rank_transition_candidates(current, candidates, model)` keeps
+three independent rankings: deterministic baseline, learned prediction, and a
+hybrid. The hybrid formula is `0.8 × ML prediction + 0.2 × plan confidence`;
+it excludes invalid timestamps/durations and tempo corrections above 12% after
+accounting for 1:1 and half/double-time relationships. These are technical
+guardrails, not a claim that all musically unusual transitions are bad.
+
+`evaluate_ranking_systems(dataset_dir, model)` reports held-out regression and
+ranking metrics for all three systems plus transparent diagnostic indicators.
+It rejects an empty test split. `export_blind_comparisons` creates evaluator
+manifests with randomized opaque options and a separate answer key; it does not
+render audio, so listening requires an external playback workflow at this stage.
+
+## Context-aware set planning
+
+`ai_dj.set_planning.plan_set(start_track, candidates, config)` uses a bounded,
+deterministic beam search to return a JSON-serializable `SetPlan`; use
+`plan_set_greedy` and `compare_greedy_and_sequence_aware` to compare it with a
+one-step baseline. It never repeats a track by default, excludes technically
+ineligible transitions, and can guide a `build`, `maintain`, `release`, or
+`peak` energy trajectory. Optional caller-supplied `artist_by_track_id` values
+penalize recent artist repetition, while tempo/key/timbre similarity supplies a
+light diversity penalty.
+
+The objective is intentionally fixed and inspectable: 65% eligible transition
+score, 20% energy-trajectory fit, and 15% variety. This is a deterministic
+search baseline—not a trained model—and it produces plans only, never audio.

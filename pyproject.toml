@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "librosa>=0.10.2",
     "numpy>=1.26",
+    "scikit-learn>=1.6",
     "soundfile>=0.12",
 ]
 
@@ -23,4 +24,3 @@ packages = ["src/ai_dj"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-

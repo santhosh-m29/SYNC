@@ -62,6 +62,21 @@ def _examples_for_pair(source: TrackAnalysis, destination: TrackAnalysis, config
     return tuple(_example_from_plan(source, destination, pair, plan, config) for plan in plans)
 
 
+def example_from_transition_plan(
+    source: TrackAnalysis,
+    destination: TrackAnalysis,
+    plan: TransitionPlan,
+    config: DatasetConfig = DatasetConfig(),
+) -> DatasetExample:
+    """Create the canonical model feature row for one already-planned transition.
+
+    Online inference uses this same transformation as dataset generation.  The
+    automatic label is retained solely because ``DatasetExample`` is a
+    versioned row type; callers must not interpret it as a new quality rating.
+    """
+    return _example_from_plan(source, destination, score_track_pair(source, destination), plan, config)
+
+
 def _stratified_plans(plans: list[TransitionPlan], limit: int) -> tuple[TransitionPlan, ...]:
     """Retain score-stratified candidates to include weak and strong examples."""
     if len(plans) <= limit:

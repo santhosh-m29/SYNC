@@ -38,6 +38,7 @@ data/annotations/
 *.pt
 *.pth
 *.ckpt
+models/transition_quality/
 
 # Experiment artifacts
 experiments/runs/
