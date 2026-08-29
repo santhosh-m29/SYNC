@@ -13,7 +13,7 @@ from ai_dj.representation.track import (
     TempoEstimate,
     TrackAnalysis,
 )
-from ai_dj.transition import find_best_transition, find_best_transitions
+from ai_dj.transition import assess_vocal_safety, find_best_transition, find_best_transitions
 
 
 def test_transition_candidates_are_structural_valid_and_ranked():
@@ -38,7 +38,7 @@ def test_transition_candidates_are_structural_valid_and_ranked():
     assert candidates[0].to_dict()["source"] == "source"
 
 
-def test_planner_uses_vocal_activity_when_available_and_neutralizes_when_missing():
+def test_planner_hard_rejects_vocal_collisions_and_allows_crossfade_when_timeline_is_missing():
     full_vocals = VocalActivityEstimate((VocalActivity(0.0, 32.0, 1.0),), True, "fixture")
     source = _track("source", duration=32.0, vocal_activity=full_vocals)
     destination = _track("destination", duration=32.0, vocal_activity=full_vocals)
@@ -46,15 +46,78 @@ def test_planner_uses_vocal_activity_when_available_and_neutralizes_when_missing
     plan = find_best_transition(source, destination)
 
     assert plan is not None
-    vocal = _component(plan, "vocals")
+    assert plan.strategy == "hard_handoff"
+    rejected_plan = find_best_transitions(source, destination, include_rejected=True)[0]
+    vocal = _component(rejected_plan, "vocals")
     assert vocal.score == 0.0
     assert vocal.confidence == 1.0
+    assert rejected_plan.vocal_safety == "reject"
 
-    unavailable = find_best_transition(_track("a", duration=32.0), _track("b", duration=32.0))
-    assert unavailable is not None
+    unavailable_source = _track("a", duration=32.0, vocal_activity=VocalActivityEstimate.unavailable())
+    unavailable_destination = _track("b", duration=32.0, vocal_activity=VocalActivityEstimate.unavailable())
+    fallback = find_best_transition(unavailable_source, unavailable_destination)
+    assert fallback is not None and fallback.duration > 0.0 and fallback.strategy == "phrase_crossfade"
+    unavailable = find_best_transitions(unavailable_source, unavailable_destination, include_rejected=True)[0]
     vocal = _component(unavailable, "vocals")
     assert vocal.score == 0.5
     assert vocal.confidence == 0.0
+    assert unavailable.vocal_safety == "unverifiable"
+
+
+def test_continuously_vocal_tracks_have_no_approved_transition():
+    vocals = VocalActivityEstimate((VocalActivity(0.0, 32.0, 1.0),), True, "trusted-fixture")
+    source = _track("source", duration=32.0, vocal_activity=vocals)
+    destination = _track("destination", duration=32.0, vocal_activity=vocals)
+
+    safe_fallbacks = find_best_transitions(source, destination)
+    assert safe_fallbacks and all(plan.strategy == "hard_handoff" for plan in safe_fallbacks)
+    assert all(plan.vocal_safety == "safe" and plan.duration == 0.0 for plan in safe_fallbacks)
+    rejected = find_best_transitions(source, destination, include_rejected=True)
+    assert rejected and all(plan.vocal_safety == "reject" for plan in rejected)
+
+
+def test_vocal_safe_structural_candidate_beats_known_heavy_vocal_collision():
+    source_vocals = VocalActivityEstimate((VocalActivity(16.0, 24.0, 1.0),), True, "trusted-fixture")
+    destination_vocals = VocalActivityEstimate((VocalActivity(8.0, 16.0, 1.0),), True, "trusted-fixture")
+    source = _track("source", duration=32.0, vocal_activity=source_vocals)
+    destination = _track("destination", duration=32.0, vocal_activity=destination_vocals)
+
+    plans = find_best_transitions(source, destination)
+
+    assert plans
+    assert plans[0].vocal_safety == "safe"
+    assert plans[0].incoming_vocal_start == 8.0
+    assert plans[0].strategy == "instrumental_entry"
+    assert all(plan.vocal_safety != "reject" for plan in plans)
+
+
+def test_vocal_gate_is_time_local_not_track_level():
+    source_vocals = VocalActivityEstimate((VocalActivity(0.0, 16.0, 1.0),), True, "trusted-fixture")
+    destination_vocals = VocalActivityEstimate((VocalActivity(20.0, 30.0, 1.0),), True, "trusted-fixture")
+    source = _track("source", duration=32.0, vocal_activity=source_vocals)
+    destination = _track("destination", duration=32.0, vocal_activity=destination_vocals)
+
+    safe_plan = find_best_transitions(source, destination, include_rejected=True)[0]
+    safe_plan = replace(safe_plan, source_exit=16.0, destination_entry=0.0, duration=8.0)
+    safe = assess_vocal_safety(source, destination, safe_plan)
+    collision_plan = replace(safe_plan, source_exit=8.0, destination_entry=20.0)
+    collision = assess_vocal_safety(source, destination, collision_plan)
+
+    assert safe.allowed and safe.collision_duration == 0.0
+    assert not collision.allowed
+    assert collision.collision_duration == 8.0
+
+
+def test_vocal_collision_integral_penalizes_only_simultaneous_regions():
+    from ai_dj.transition.planner import _vocal_component
+
+    source = _track("source", duration=32.0, vocal_activity=VocalActivityEstimate((VocalActivity(16.0, 24.0, 1.0),), True, "fixture"))
+    destination = _track("destination", duration=32.0, vocal_activity=VocalActivityEstimate((VocalActivity(8.0, 16.0, 1.0),), True, "fixture"))
+    safe = _vocal_component(source, destination, 16.0, 0.0, 8.0)
+    collision = _vocal_component(source, destination, 16.0, 8.0, 8.0)
+
+    assert safe.score == 1.0
+    assert collision.score == 0.0
 
 
 def test_short_or_unstructured_tracks_produce_no_fabricated_transition_points():
@@ -103,5 +166,10 @@ def _track(
         key=KeyEstimate("C major", confidence),
         energy=EnergyEstimate(0.7, energy_points),
         spectral=SpectralFeatures(1000.0, 700.0, 2200.0, (10.0,), tuple(float(value) for value in range(13))),
-        structure=StructureAnalysis(bars=bars, phrases=phrases, sections=(), vocal_activity=vocal_activity or VocalActivityEstimate.unavailable()),
+        structure=StructureAnalysis(
+            bars=bars,
+            phrases=phrases,
+            sections=(),
+            vocal_activity=vocal_activity or VocalActivityEstimate((), True, "trusted-silent-fixture"),
+        ),
     )

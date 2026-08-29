@@ -1,0 +1,169 @@
+{
+  "analysis": {
+    "analysis_version": "2.0",
+    "beats": {
+      "confidence": 0.88,
+      "timestamps": [
+        0.023219954648526078,
+        0.5340589569160997,
+        1.0448979591836736,
+        1.5325170068027212,
+        2.043356009070295,
+        2.5309750566893423,
+        3.0418140589569163,
+        3.5294331065759637,
+        4.040272108843538,
+        4.527891156462585,
+        5.038730158730159,
+        5.526349206349207,
+        6.03718820861678,
+        6.524807256235827,
+        7.035646258503402,
+        7.523265306122449
+      ]
+    },
+    "downbeats": {
+      "confidence": 0.158,
+      "meter": 4,
+      "timestamps": [
+        1.0448979591836736,
+        3.0418140589569163,
+        5.038730158730159,
+        7.035646258503402
+      ]
+    },
+    "duration": 8.0,
+    "energy": {
+      "global": 0.659658,
+      "timeline": [
+        {
+          "timestamp": 0.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 1.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 2.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 3.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 4.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 5.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 6.5,
+          "value": 0.659658
+        },
+        {
+          "timestamp": 7.5,
+          "value": 0.659658
+        }
+      ]
+    },
+    "key": {
+      "confidence": 0.246,
+      "key": "A minor"
+    },
+    "source_path": "D:\\Repos\\PaatuPaadaPoren\\tests_tmp\\test_cli_continues_after_a_bad0\\music\\valid.wav",
+    "spectral": {
+      "bandwidth_hz": 475.64682,
+      "centroid_hz": 290.371759,
+      "contrast": [
+        9.230936,
+        8.207183,
+        8.23246,
+        8.245311,
+        8.206599,
+        8.083663,
+        7.787041
+      ],
+      "mfcc": [
+        -477.80542,
+        19.147562,
+        4.562548,
+        4.556869,
+        3.236984,
+        2.873095,
+        2.319178,
+        2.045972,
+        1.73604,
+        1.565618,
+        1.386479,
+        1.262783,
+        1.129426
+      ],
+      "rolloff_hz": 719.177777
+    },
+    "structure": {
+      "bars": [
+        {
+          "confidence": 0.158,
+          "end": 3.041814,
+          "start": 1.044898
+        },
+        {
+          "confidence": 0.158,
+          "end": 5.03873,
+          "start": 3.041814
+        },
+        {
+          "confidence": 0.158,
+          "end": 7.035646,
+          "start": 5.03873
+        },
+        {
+          "confidence": 0.158,
+          "end": 8.0,
+          "start": 7.035646
+        }
+      ],
+      "phrases": [
+        {
+          "confidence": 0.158,
+          "end": 8.0,
+          "start": 1.044898
+        }
+      ],
+      "sections": [
+        {
+          "confidence": 0.158,
+          "end": 8.0,
+          "label": "other",
+          "repetition_id": "section_1",
+          "start": 0.0
+        }
+      ],
+      "vocal_activity": {
+        "available": false,
+        "confidence": 0.0,
+        "method": "unavailable",
+        "segments": []
+      }
+    },
+    "tempo": {
+      "bpm": 117.454,
+      "confidence": 0.727,
+      "octave_alternatives": [
+        58.727,
+        234.908
+      ]
+    },
+    "track_id": "18664ed36749bbad99f4"
+  },
+  "fingerprint": {
+    "analysis_version": "2.0",
+    "modified_ns": 1788008218086505700,
+    "path": "D:\\Repos\\PaatuPaadaPoren\\tests_tmp\\test_cli_continues_after_a_bad0\\music\\valid.wav",
+    "size": 352844
+  }
+}

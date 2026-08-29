@@ -43,6 +43,7 @@ def test_dataset_rows_have_versioned_schema_and_automatic_labels():
     assert example.label_source == "automatic"
     assert 0.0 <= example.label <= 1.0
     assert example.features["transition_features"]["strategy"]
+    assert {"safety", "collision_duration", "maximum_overlap_probability", "integrated_overlap"} <= set(example.features["vocal_features"])
 
 
 def test_dataset_generation_is_reproducible_and_stratifies_pair_candidates():
@@ -121,6 +122,6 @@ def _track(track_id: str, *, bpm: float, key: str) -> TrackAnalysis:
             bars=tuple(Bar(start, start + 2.0, 0.9) for start in downbeats),
             phrases=tuple(Phrase(start, start + 8.0, 0.9) for start in (0.0, 8.0, 16.0, 24.0)),
             sections=(),
-            vocal_activity=VocalActivityEstimate.unavailable(),
+            vocal_activity=VocalActivityEstimate((), True, "trusted-silent-fixture"),
         ),
     )

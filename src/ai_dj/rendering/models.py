@@ -18,6 +18,14 @@ class RenderConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class StemPaths:
+    """Time-aligned vocal and accompaniment stems for one source track."""
+
+    vocals: Path
+    accompaniment: Path
+
+
+@dataclass(frozen=True, slots=True)
 class RenderResult:
     output_path: Path
     sample_rate: int

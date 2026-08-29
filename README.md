@@ -173,3 +173,16 @@ assembly uses a conservative 20 ms equal-power join and records boundary-jump,
 beat-offset, RMS-range, finite-sample, clipping, and unavailable-artifact
 diagnostics. See [the system audit](docs/SYSTEM_AUDIT.md) for measured baseline
 and improvement evidence, including a 32-track local-library integration run.
+
+## Vocal-aware planning
+
+Normal playback is fail-closed: it requires trusted vocal timelines for both
+tracks and rejects every sustained significant vocal-vocal overlap. The ML
+ranker cannot override this deterministic gate. It favors vocal-safe phrase
+and beat-aligned alternatives, records the incoming vocal entrance, and uses an
+instrumental entry when the next vocal naturally starts later. Existing mixed
+audio is intentionally marked as vocal activity unavailable; the system does
+not fabricate vocal predictions from generic DSP and will not claim a
+vocal-safe crossfade without validation. See
+[vocal-aware transitions](docs/VOCAL_AWARE_TRANSITIONS.md) for the capability
+boundary and evaluation status.

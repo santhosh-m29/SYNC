@@ -65,9 +65,17 @@ def _system_indicators(rows: list[dict[str, Any]]) -> dict[str, float | None]:
         values = [float(item[name]["score"]) for item in components if name in item]
         return round(float(np.mean(values)), 6) if values else None
     vocal = mean_score("vocals")
+    vocal_features = [row["features"].get("vocal_features", {}) for row in rows]
+    safety = [str(item.get("safety")) for item in vocal_features if item.get("safety") is not None]
+    collision_durations = [float(item["collision_duration"]) for item in vocal_features if item.get("collision_duration") is not None]
+    maximum_overlap = [float(item["maximum_overlap_probability"]) for item in vocal_features if item.get("maximum_overlap_probability") is not None]
     energy = mean_score("energy")
     return {
         "mean_beat_alignment": mean_score("beat_alignment"),
+        "vocal_collision_rate": round(sum(item == "reject" for item in safety) / len(safety), 6) if safety else None,
+        "mean_vocal_overlap_duration": round(float(np.mean(collision_durations)), 6) if collision_durations else None,
+        "maximum_vocal_overlap_probability": round(float(max(maximum_overlap)), 6) if maximum_overlap else None,
+        "safe_transition_rate": round(sum(item == "safe" for item in safety) / len(safety), 6) if safety else None,
         "estimated_vocal_collision_rate": round(1.0 - vocal, 6) if vocal is not None else None,
         "mean_energy_discontinuity": round(1.0 - energy, 6) if energy is not None else None,
         "technical_artifact_rate": None,

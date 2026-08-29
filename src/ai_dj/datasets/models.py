@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-DATASET_VERSION = "1.0"
-FEATURE_VERSION = "1.0"
+DATASET_VERSION = "1.1"
+FEATURE_VERSION = "1.1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,8 +28,8 @@ class DatasetConfig:
             "split_ratios": list(self.split_ratios),
             "provenance": self.provenance,
             "group_by_track_id": self.group_by_track_id or {},
-            "candidate_strategy": "deterministic_stratified_transition_score",
-            "label_strategy": "automatic_transition_plan_score",
+            "candidate_strategy": "deterministic_stratified_transition_score_with_vocal_hard_negatives",
+            "label_strategy": "automatic_transition_plan_score_with_vocal_rejections_labelled_zero",
         }
 
 

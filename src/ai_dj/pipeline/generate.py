@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,10 +17,11 @@ import soundfile as sf
 
 from ai_dj.pipeline.analyze import LibraryAnalysisResult, analyze_library
 from ai_dj.pipeline.cache import AnalysisCache
-from ai_dj.rendering import RenderConfig, RenderResult, render_transition
+from ai_dj.rendering import RenderConfig, RenderResult, render_transition, separate_stems
 from ai_dj.representation.json_io import write_analysis
 from ai_dj.representation.track import TrackAnalysis
 from ai_dj.set_planning import SetPlan, SetPlanningConfig, plan_set
+from ai_dj.transition import find_best_transitions
 
 
 class GenerationError(RuntimeError):
@@ -37,6 +38,8 @@ class GenerationConfig:
     start_track_id: str | None = None
     sample_rate: int = 22_050
     set_join_seconds: float = 0.02
+    use_vocal_stems: bool = False
+    stem_cache_directory: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,16 +97,25 @@ def generate_dj_set(
     segment_directory = output.parent / f".{output.stem}_segments"
     segment_directory.mkdir(parents=True, exist_ok=True)
     tracks = {track.track_id: track for track in analysis_result.analyses}
+    if config.use_vocal_stems:
+        set_plan = _upgrade_to_stem_crossfades(set_plan, tracks)
     renders: list[RenderResult] = []
     for index, step in enumerate(set_plan.steps, start=1):
         source = tracks[step.transition.source_track_id]
         destination = tracks[step.transition.destination_track_id]
+        source_stems = destination_stems = None
+        if config.use_vocal_stems:
+            stem_root = Path(config.stem_cache_directory) if config.stem_cache_directory else root / ".ai_dj_stems"
+            source_stems = separate_stems(source.source_path, stem_root)
+            destination_stems = separate_stems(destination.source_path, stem_root)
         result = render_transition(
             source,
             destination,
             step.transition,
             segment_directory / f"{index:02d}_{source.track_id}_{destination.track_id}.wav",
             RenderConfig(sample_rate=config.sample_rate),
+            source_stems=source_stems,
+            destination_stems=destination_stems,
         )
         _validate_render(result)
         renders.append(result)
@@ -112,6 +124,8 @@ def generate_dj_set(
     quality = _set_quality(output, renders, joins)
     _validate_set_quality(quality)
     fallbacks = ["deterministic_transition_and_set_scoring"]
+    if config.use_vocal_stems:
+        fallbacks.append("demucs_stem_vocal_handoff")
     if any(track.tempo.confidence < 0.25 for track in tracks.values() if track.track_id in set_plan.track_ids):
         fallbacks.append("low_tempo_confidence_used_existing_technical_constraints")
     metrics = {
@@ -159,6 +173,18 @@ def retrieve_candidates(current: TrackAnalysis, tracks: list[TrackAnalysis], lim
         key_penalty = 0.0 if current.key.key is None or track.key.key is None or current.key.key == track.key.key else 0.2
         return tempo + 0.5 * energy + key_penalty, track.track_id
     return tuple(sorted(candidates, key=key)[:limit])
+
+
+def _upgrade_to_stem_crossfades(set_plan: SetPlan, tracks: dict[str, TrackAnalysis]) -> SetPlan:
+    """Restore smooth prior crossfades only when renderer-owned stems are ready."""
+    previous_id = set_plan.track_ids[0]
+    updated_steps = []
+    for step in set_plan.steps:
+        plans = find_best_transitions(tracks[previous_id], tracks[step.track_id], include_rejected=True)
+        smooth = next((plan for plan in plans if plan.duration > 0.0), step.transition)
+        updated_steps.append(replace(step, transition=smooth, transition_score=smooth.overall_score))
+        previous_id = step.track_id
+    return replace(set_plan, steps=tuple(updated_steps), notes=set_plan.notes + ("Stem-backed vocal handoffs restore smooth accompaniment crossfades.",))
 
 
 def _choose_start_track(tracks: list[TrackAnalysis], config: GenerationConfig) -> TrackAnalysis:

@@ -1,0 +1,219 @@
+{
+  "analysis_versions": [
+    "2.0"
+  ],
+  "baseline_metrics": {
+    "test": {
+      "mae": 0.463636,
+      "pearson_correlation": -0.984941,
+      "rmse": 0.540835
+    },
+    "train": {
+      "mae": 0.463636,
+      "pearson_correlation": -0.984941,
+      "rmse": 0.540835
+    },
+    "validation": {
+      "mae": 0.463636,
+      "pearson_correlation": -0.984941,
+      "rmse": 0.540835
+    }
+  },
+  "comparison": {
+    "improves_baseline_mae": true,
+    "interpretation": "Automatic labels equal the deterministic plan score; a zero-error automatic-label baseline cannot be improved on that target. Human labels are required for a meaningful quality comparison.",
+    "test_mae_delta_vs_baseline": -0.427098
+  },
+  "dataset_version": "fixture-1",
+  "environment": {
+    "numpy": "2.5.2",
+    "python": "3.14.7"
+  },
+  "feature_importance": [
+    {
+      "feature": "energy_features.candidate.score",
+      "mae_increase": 0.28617
+    },
+    {
+      "feature": "bpm_a",
+      "mae_increase": 0.054441
+    },
+    {
+      "feature": "bpm_b",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "energy_features.candidate.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "energy_features.destination_global",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "energy_features.difference",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "energy_features.source_global",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "harmonic_features.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "harmonic_features.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "rhythm_features.candidate.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "rhythm_features.candidate.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "rhythm_features.pair.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "rhythm_features.pair.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "spectral_features.destination_centroid_hz",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "spectral_features.pair.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "spectral_features.pair.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "spectral_features.source_centroid_hz",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.candidate.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.candidate.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.destination_phrase_count",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.pair.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.pair.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.phrase_alignment.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.phrase_alignment.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "structure_features.source_phrase_count",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "tempo_difference",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "transition_features.components.tempo.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "transition_features.components.tempo.score",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "transition_features.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "vocal_features.confidence",
+      "mae_increase": 0.0
+    },
+    {
+      "feature": "vocal_features.score",
+      "mae_increase": 0.0
+    }
+  ],
+  "feature_names": [
+    "bpm_a",
+    "bpm_b",
+    "energy_features.candidate.confidence",
+    "energy_features.candidate.score",
+    "energy_features.destination_global",
+    "energy_features.difference",
+    "energy_features.source_global",
+    "harmonic_features.confidence",
+    "harmonic_features.score",
+    "rhythm_features.candidate.confidence",
+    "rhythm_features.candidate.score",
+    "rhythm_features.pair.confidence",
+    "rhythm_features.pair.score",
+    "spectral_features.destination_centroid_hz",
+    "spectral_features.pair.confidence",
+    "spectral_features.pair.score",
+    "spectral_features.source_centroid_hz",
+    "structure_features.candidate.confidence",
+    "structure_features.candidate.score",
+    "structure_features.destination_phrase_count",
+    "structure_features.pair.confidence",
+    "structure_features.pair.score",
+    "structure_features.phrase_alignment.confidence",
+    "structure_features.phrase_alignment.score",
+    "structure_features.source_phrase_count",
+    "tempo_difference",
+    "transition_features.components.tempo.confidence",
+    "transition_features.components.tempo.score",
+    "transition_features.confidence",
+    "vocal_features.confidence",
+    "vocal_features.score"
+  ],
+  "feature_version": "1.0",
+  "model_type": "HistGradientBoostingRegressor",
+  "model_version": "1.0",
+  "split_metrics": {
+    "test": {
+      "mae": 0.036538,
+      "pearson_correlation": 1.0,
+      "rmse": 0.043195
+    },
+    "train": {
+      "mae": 0.036538,
+      "pearson_correlation": 1.0,
+      "rmse": 0.043195
+    },
+    "validation": {
+      "mae": 0.036538,
+      "pearson_correlation": 1.0,
+      "rmse": 0.043195
+    }
+  },
+  "training_config": {
+    "learning_rate": 0.08,
+    "max_iter": 20,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 2,
+    "model_version": "1.0",
+    "seed": 5
+  }
+}

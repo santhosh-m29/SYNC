@@ -15,6 +15,7 @@ from ai_dj.matching.models import CompatibilityResult
 from ai_dj.representation.structure import VocalActivityEstimate
 from ai_dj.representation.track import TrackAnalysis
 from ai_dj.transition.models import TransitionComponent, TransitionPlan
+from ai_dj.transition.vocal_safety import assess_vocal_safety
 
 TRANSITION_WEIGHTS = {
     "tempo": 0.15,
@@ -22,7 +23,7 @@ TRANSITION_WEIGHTS = {
     "phrase_alignment": 0.20,
     "harmony": 0.15,
     "energy": 0.15,
-    "vocals": 0.10,
+    "vocals": 0.20,
     "structure": 0.10,
 }
 _DURATIONS = (16.0, 8.0, 4.0)
@@ -36,7 +37,9 @@ class _CandidatePoint:
     confidence: float
 
 
-def find_best_transitions(source: TrackAnalysis, destination: TrackAnalysis) -> list[TransitionPlan]:
+def find_best_transitions(
+    source: TrackAnalysis, destination: TrackAnalysis, *, include_rejected: bool = False
+) -> list[TransitionPlan]:
     """Return valid source-exit × destination-entry candidates in ranked order."""
     pair = score_track_pair(source, destination)
     exits = _exit_points(source)
@@ -48,10 +51,21 @@ def find_best_transitions(source: TrackAnalysis, destination: TrackAnalysis) -> 
             if duration is None:
                 continue
             plans.append(_plan(source, destination, pair, exit_point, entry_point, duration))
-    return sorted(
+    ranked = sorted(
         plans,
         key=lambda plan: (-plan.overall_score, -plan.confidence, -plan.duration, plan.source_exit, plan.destination_entry),
     )
+    # Dataset builders can retain rejected overlaps as hard negatives. Playback
+    # receives only safe crossfades. If no crossfade is provably safe, use a
+    # beat/phrase-aligned zero-overlap handoff: it preserves the no-simultaneous-
+    # vocals rule without treating an entire vocal song as ineligible.
+    if include_rejected:
+        return ranked
+    safe = [plan for plan in ranked if plan.vocal_safety == "safe"]
+    if safe:
+        return safe
+    eligible = [plan for plan in ranked if plan.vocal_safety != "reject"]
+    return eligible or _handoff_plans(source, destination, pair, exits, entries)
 
 
 def find_best_transition(source: TrackAnalysis, destination: TrackAnalysis) -> TransitionPlan | None:
@@ -123,6 +137,21 @@ def _duration_for(source: TrackAnalysis, destination: TrackAnalysis, source_exit
     return None
 
 
+def _handoff_plans(
+    source: TrackAnalysis,
+    destination: TrackAnalysis,
+    pair: CompatibilityResult,
+    exits: tuple[_CandidatePoint, ...],
+    entries: tuple[_CandidatePoint, ...],
+) -> list[TransitionPlan]:
+    """Create a last-resort no-overlap handoff at existing musical boundaries."""
+    plans = [_plan(source, destination, pair, exit_point, entry_point, 0.0) for exit_point in exits for entry_point in entries]
+    return sorted(
+        plans,
+        key=lambda plan: (-plan.overall_score, -plan.confidence, plan.source_exit, plan.destination_entry),
+    )
+
+
 def _plan(
     source: TrackAnalysis,
     destination: TrackAnalysis,
@@ -147,6 +176,26 @@ def _plan(
         if effective_weight > 0
         else 0.5
     )
+    vocal = next(component for component in components if component.name == "vocals")
+    provisional = TransitionPlan(
+        source_track_id=source.track_id,
+        destination_track_id=destination.track_id,
+        source_exit=exit_point.timestamp,
+        destination_entry=entry_point.timestamp,
+        duration=duration,
+        strategy=_strategy(source, destination, exit_point, entry_point, duration),
+        overall_score=0.0,
+        confidence=0.0,
+        components=(),
+        strengths=(),
+        weaknesses=(),
+    )
+    safety = assess_vocal_safety(source, destination, provisional)
+    vocal_safety = "safe" if safety.allowed else "reject" if safety.verified else "unverifiable"
+    # This explicit penalty makes a proven vocal collision lose to a safe
+    # structural alternative even when its tempo/key score is slightly higher.
+    if vocal.confidence > 0.0 and vocal_safety == "reject":
+        overall *= 0.55 + 0.45 * vocal.score
     strengths = tuple(component.reason for component in components if component.confidence >= 0.5 and component.score >= 0.75)
     weaknesses = tuple(component.reason for component in components if component.confidence >= 0.5 and component.score < 0.45)
     return TransitionPlan(
@@ -155,12 +204,17 @@ def _plan(
         source_exit=exit_point.timestamp,
         destination_entry=entry_point.timestamp,
         duration=duration,
-        strategy=_strategy(source, destination, exit_point, entry_point),
+        strategy=provisional.strategy,
         overall_score=round(float(np.clip(overall, 0.0, 1.0)), 3),
         confidence=round(float(np.clip(effective_weight / base_weight, 0.0, 1.0)), 3),
         components=components,
         strengths=strengths,
         weaknesses=weaknesses,
+        incoming_vocal_start=_incoming_vocal_start(destination, entry_point.timestamp),
+        vocal_safety=vocal_safety,
+        vocal_collision_duration=safety.collision_duration,
+        maximum_vocal_overlap_probability=safety.maximum_overlap_probability,
+        integrated_vocal_overlap=safety.integrated_overlap,
     )
 
 
@@ -201,9 +255,15 @@ def _vocal_component(source: TrackAnalysis, destination: TrackAnalysis, source_t
     destination_vocals = destination.structure.vocal_activity
     if not source_vocals.available or not destination_vocals.available:
         return _component("vocals", 0.5, 0.0, "Vocal activity unavailable")
+    collision = _vocal_overlap(source_vocals, destination_vocals, source_time, destination_time, duration)
     source_probability = _vocal_probability(source_vocals, source_time, source_time + duration)
     destination_probability = _vocal_probability(destination_vocals, destination_time, destination_time + duration)
-    return _component("vocals", 1.0 - source_probability * destination_probability, 1.0, "Estimated local vocal-overlap risk")
+    return _component(
+        "vocals",
+        1.0 - collision,
+        1.0,
+        f"Vocal collision integral {collision:.3f}; source {source_probability:.3f}, destination {destination_probability:.3f}",
+    )
 
 
 def _structure_component(pair: CompatibilityResult, exit_point: _CandidatePoint, entry_point: _CandidatePoint) -> TransitionComponent:
@@ -217,7 +277,14 @@ def _structure_component(pair: CompatibilityResult, exit_point: _CandidatePoint,
     )
 
 
-def _strategy(source: TrackAnalysis, destination: TrackAnalysis, exit_point: _CandidatePoint, entry_point: _CandidatePoint) -> str:
+def _strategy(
+    source: TrackAnalysis, destination: TrackAnalysis, exit_point: _CandidatePoint, entry_point: _CandidatePoint, duration: float
+) -> str:
+    if duration == 0.0:
+        return "hard_handoff"
+    incoming_start = _incoming_vocal_start(destination, entry_point.timestamp)
+    if incoming_start is not None and incoming_start > entry_point.timestamp + 1.0:
+        return "instrumental_entry"
     if "phrase" in exit_point.kinds and "phrase" in entry_point.kinds:
         return "phrase_crossfade"
     if exit_point.timestamp >= source.duration * 0.75 and entry_point.timestamp <= destination.duration * 0.2:
@@ -248,6 +315,33 @@ def _vocal_probability(estimate: VocalActivityEstimate, start: float, end: float
         overlap = max(0.0, min(end, segment.end) - max(start, segment.start))
         weighted += overlap * segment.probability
     return float(np.clip(weighted / length, 0.0, 1.0))
+
+
+def _vocal_overlap(
+    source: VocalActivityEstimate,
+    destination: VocalActivityEstimate,
+    source_time: float,
+    destination_time: float,
+    duration: float,
+) -> float:
+    """Mean product of aligned vocal probabilities across the overlap window."""
+    total = 0.0
+    for left in source.segments:
+        left_start = max(0.0, left.start - source_time)
+        left_end = min(duration, left.end - source_time)
+        if left_end <= left_start:
+            continue
+        for right in destination.segments:
+            right_start = max(0.0, right.start - destination_time)
+            right_end = min(duration, right.end - destination_time)
+            overlap = max(0.0, min(left_end, right_end) - max(left_start, right_start))
+            total += overlap * left.probability * right.probability
+    return float(np.clip(total / max(duration, 1e-12), 0.0, 1.0))
+
+
+def _incoming_vocal_start(destination: TrackAnalysis, entry: float) -> float | None:
+    estimate = destination.structure.vocal_activity
+    return estimate.first_significant_start_after(entry) if estimate.available else None
 
 
 def _component(name: str, score: float, confidence: float, reason: str) -> TransitionComponent:

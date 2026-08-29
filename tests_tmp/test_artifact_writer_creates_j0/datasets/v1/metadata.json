@@ -1,0 +1,41 @@
+{
+  "analysis_versions": [
+    "2.0"
+  ],
+  "candidate_count": 36,
+  "candidate_strategy": "deterministic_stratified_transition_score_with_vocal_hard_negatives",
+  "dataset_version": "1.1",
+  "feature_version": "1.1",
+  "group_by_track_id": {},
+  "label_distribution": {
+    "high_[.66,1]": 36,
+    "low_[0,.33)": 0,
+    "medium_[.33,.66)": 0
+  },
+  "label_strategy": "automatic_transition_plan_score_with_vocal_rejections_labelled_zero",
+  "max_candidates_per_pair": 2,
+  "provenance": "user-provided or licensed audio; provenance must be verified by the dataset owner",
+  "seed": 7,
+  "split_counts": {
+    "test": 12,
+    "train": 12,
+    "validation": 12
+  },
+  "split_ratios": [
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333
+  ],
+  "track_count": 9,
+  "track_split_assignments": {
+    "track-0": "validation",
+    "track-1": "train",
+    "track-2": "test",
+    "track-3": "test",
+    "track-4": "validation",
+    "track-5": "test",
+    "track-6": "train",
+    "track-7": "train",
+    "track-8": "validation"
+  }
+}

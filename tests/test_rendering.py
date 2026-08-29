@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from ai_dj.rendering import RenderConfig, RenderError, render_transition
+from ai_dj.rendering import RenderConfig, RenderError, StemPaths, render_transition
+from ai_dj.representation.structure import VocalActivity, VocalActivityEstimate
 from ai_dj.representation.track import TempoEstimate
 from ai_dj.transition import find_best_transition
 from tests.test_transition_planner import _track
@@ -53,6 +54,42 @@ def test_renderer_peak_protection_and_plan_identifiers(tmp_path):
     wrong_plan = replace(plan, source_track_id="wrong")
     with pytest.raises(RenderError, match="identifiers"):
         render_transition(source, destination, wrong_plan, tmp_path / "wrong.wav", RenderConfig(sample_rate=8_000))
+
+
+def test_renderer_refuses_a_manually_supplied_vocal_collision(tmp_path):
+    source, destination, plan = _render_fixture(tmp_path)
+    vocals = VocalActivityEstimate((VocalActivity(0.0, 32.0, 1.0),), True, "trusted-fixture")
+    source = replace(source, structure=replace(source.structure, vocal_activity=vocals))
+    destination = replace(destination, structure=replace(destination.structure, vocal_activity=vocals))
+    with pytest.raises(RenderError, match="vocal"):
+        render_transition(source, destination, plan, tmp_path / "collision.wav", RenderConfig(sample_rate=8_000))
+
+
+def test_stem_handoff_keeps_backing_crossfade_and_never_overlaps_vocal_envelopes(tmp_path):
+    source, destination, plan = _render_fixture(tmp_path)
+    plan = replace(plan, duration=8.0, strategy="phrase_crossfade")
+    source_stems = _write_stems(tmp_path, "source", 220.0)
+    destination_stems = _write_stems(tmp_path, "destination", 330.0)
+    result = render_transition(
+        source, destination, plan, tmp_path / "stem-handoff.wav", RenderConfig(sample_rate=8_000),
+        source_stems=source_stems, destination_stems=destination_stems,
+    )
+    from ai_dj.rendering.renderer import _vocal_handoff_fades
+    source_fade, destination_fade = _vocal_handoff_fades(int(plan.duration * 8_000))
+    assert result.transition_duration == 8.0
+    assert not np.any((source_fade > 0.0) & (destination_fade > 0.0))
+    assert (tmp_path / "stem-handoff.wav").is_file()
+
+
+def _write_stems(directory, prefix, frequency):
+    sample_rate, duration = 8_000, 32.0
+    time = np.arange(sample_rate * duration, dtype=np.float32) / sample_rate
+    backing = 0.15 * np.sin(2 * np.pi * frequency * time)
+    vocals = 0.1 * np.sin(2 * np.pi * (frequency * 2) * time)
+    backing_path, vocal_path = directory / f"{prefix}-backing.wav", directory / f"{prefix}-vocals.wav"
+    sf.write(backing_path, backing, sample_rate, subtype="FLOAT")
+    sf.write(vocal_path, vocals, sample_rate, subtype="FLOAT")
+    return StemPaths(vocals=vocal_path, accompaniment=backing_path)
 
 
 def _render_fixture(tmp_path, *, destination_bpm=120.0, amplitude=0.5):

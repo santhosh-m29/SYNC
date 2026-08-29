@@ -37,6 +37,11 @@ class TransitionPlan:
     components: tuple[TransitionComponent, ...]
     strengths: tuple[str, ...]
     weaknesses: tuple[str, ...]
+    incoming_vocal_start: float | None = None
+    vocal_safety: str = "unknown"
+    vocal_collision_duration: float | None = None
+    maximum_vocal_overlap_probability: float | None = None
+    integrated_vocal_overlap: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -51,4 +56,9 @@ class TransitionPlan:
             "components": [component.to_dict() for component in self.components],
             "strengths": list(self.strengths),
             "weaknesses": list(self.weaknesses),
+            "incoming_vocal_start": self.incoming_vocal_start,
+            "vocal_safety": self.vocal_safety,
+            "vocal_collision_duration": self.vocal_collision_duration,
+            "maximum_vocal_overlap_probability": self.maximum_vocal_overlap_probability,
+            "integrated_vocal_overlap": self.integrated_vocal_overlap,
         }

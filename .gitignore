@@ -33,6 +33,7 @@ data/datasets/
 data/annotations/
 .ai_dj_cache/
 .ai_dj_analysis/
+.ai_dj_stems/
 
 # ML artifacts
 *.pt

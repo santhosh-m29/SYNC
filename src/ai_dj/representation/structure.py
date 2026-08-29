@@ -81,16 +81,18 @@ class VocalActivityEstimate:
     segments: tuple[VocalActivity, ...]
     available: bool
     method: str
+    confidence: float = 1.0
 
     @classmethod
     def unavailable(cls) -> "VocalActivityEstimate":
-        return cls(segments=(), available=False, method="unavailable")
+        return cls(segments=(), available=False, method="unavailable", confidence=0.0)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "segments": [segment.to_dict() for segment in self.segments],
             "available": self.available,
             "method": self.method,
+            "confidence": self.confidence,
         }
 
     @classmethod
@@ -99,7 +101,17 @@ class VocalActivityEstimate:
             segments=tuple(VocalActivity.from_dict(item) for item in value["segments"]),
             available=bool(value["available"]),
             method=str(value["method"]),
+            confidence=float(value.get("confidence", 1.0 if value.get("available") else 0.0)),
         )
+
+    def probability_at(self, timestamp: float) -> float:
+        """Return the trusted piecewise vocal probability at ``timestamp``."""
+        return max((segment.probability for segment in self.segments if segment.start <= timestamp < segment.end), default=0.0)
+
+    def first_significant_start_after(self, timestamp: float, threshold: float = 0.5) -> float | None:
+        """Find the first meaningful vocal entrance without inventing one."""
+        starts = [max(timestamp, segment.start) for segment in self.segments if segment.end > timestamp and segment.probability >= threshold]
+        return min(starts) if starts else None
 
 
 @dataclass(frozen=True, slots=True)

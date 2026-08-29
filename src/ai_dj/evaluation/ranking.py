@@ -14,6 +14,7 @@ from ai_dj.models import TransitionQualityModel, predict_transition_quality
 from ai_dj.representation.track import TrackAnalysis
 from ai_dj.transition import find_best_transitions
 from ai_dj.transition.models import TransitionPlan
+from ai_dj.transition.vocal_safety import assess_vocal_safety
 
 RankingSystem = Literal["baseline", "ml", "hybrid"]
 _MAX_TEMPO_ADJUSTMENT = 0.12
@@ -66,8 +67,11 @@ def assess_transition_constraints(
         reasons.append("A track has no usable duration")
     if not (0.0 <= plan.source_exit < source.duration and 0.0 <= plan.destination_entry < destination.duration):
         reasons.append("Plan timestamps are outside track bounds")
-    if plan.duration <= 0.0 or plan.source_exit + plan.duration > source.duration or plan.destination_entry + plan.duration > destination.duration:
+    if plan.duration < 0.0 or plan.source_exit + plan.duration > source.duration or plan.destination_entry + plan.duration > destination.duration:
         reasons.append("Plan duration exceeds available audio")
+    vocal_safety = assess_vocal_safety(source, destination, plan)
+    if vocal_safety.verified and not vocal_safety.allowed:
+        reasons.append(vocal_safety.reason)
     if source.tempo.bpm <= 0.0 or destination.tempo.bpm <= 0.0 or source.tempo.confidence <= 0.0 or destination.tempo.confidence <= 0.0:
         reasons.append("Required tempo analysis is unavailable")
         return ConstraintResult(False, tuple(reasons), None)

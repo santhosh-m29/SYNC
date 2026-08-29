@@ -57,7 +57,9 @@ def generate_dataset(
 
 
 def _examples_for_pair(source: TrackAnalysis, destination: TrackAnalysis, config: DatasetConfig) -> tuple[DatasetExample, ...]:
-    plans = _stratified_plans(find_best_transitions(source, destination), config.max_candidates_per_pair)
+    # Keep hard-rejected plans only in offline data so the model sees vocal
+    # collision hard negatives.  Playback APIs never receive these candidates.
+    plans = _stratified_plans(find_best_transitions(source, destination, include_rejected=True), config.max_candidates_per_pair)
     pair = score_track_pair(source, destination)
     return tuple(_example_from_plan(source, destination, pair, plan, config) for plan in plans)
 
@@ -114,7 +116,13 @@ def _example_from_plan(
             "candidate": transition["structure"],
             "phrase_alignment": transition["phrase_alignment"],
         },
-        "vocal_features": transition["vocals"],
+        "vocal_features": {
+            **transition["vocals"],
+            "safety": plan.vocal_safety,
+            "collision_duration": plan.vocal_collision_duration,
+            "maximum_overlap_probability": plan.maximum_vocal_overlap_probability,
+            "integrated_overlap": plan.integrated_vocal_overlap,
+        },
         "spectral_features": {
             "pair": compatibility["timbre"],
             "source_centroid_hz": source.spectral.centroid_hz,
@@ -137,7 +145,7 @@ def _example_from_plan(
         transition_duration=plan.duration,
         strategy=plan.strategy,
         features=features,
-        label=plan.overall_score,
+        label=0.0 if plan.vocal_safety == "reject" else plan.overall_score,
         label_source="automatic",
         dataset_version=config.dataset_version,
         analysis_version=source.analysis_version,

@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--seed", type=int, default=7, help="Recorded reproducibility seed.")
     generate.add_argument("--cache-dir", type=Path, help="Directory for reusable analysis cache entries.")
     generate.add_argument("--analysis-output-dir", type=Path, help="Optional directory for TrackAnalysis JSON documents.")
+    generate.add_argument("--vocal-stems", action="store_true", help="Use local Demucs stems for smooth non-overlapping vocal handoffs.")
+    generate.add_argument("--stem-cache-dir", type=Path, help="Directory for reusable local Demucs stem files.")
     return parser
 
 
@@ -53,6 +55,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     candidate_pool_size=args.candidate_pool_size,
                     beam_width=args.beam_width,
                     seed=args.seed,
+                    use_vocal_stems=args.vocal_stems,
+                    stem_cache_directory=str(args.stem_cache_dir) if args.stem_cache_dir else None,
                 ),
                 cache_directory=args.cache_dir,
                 analysis_output_directory=args.analysis_output_dir,
