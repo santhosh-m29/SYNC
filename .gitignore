@@ -25,6 +25,12 @@ test_music/
 *.m4a
 *.aac
 
+# Allow sample audio files
+!SAMPLE/*.wav
+
+# Test artifacts
+tests_tmp/
+
 # Generated output
 output/
 data/cache/
