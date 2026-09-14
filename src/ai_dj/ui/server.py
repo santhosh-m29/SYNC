@@ -162,6 +162,13 @@ def make_server(app, port=8765):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-cache")
             self.send_header("X-Content-Type-Options", "nosniff")
+            # The API remains loopback-only by Host, while allowing the separately
+            # deployed frontend to read state from the user's own engine.
+            origin = self.headers.get("Origin")
+            if origin:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+                self.send_header("Access-Control-Allow-Credentials", "false")
             self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
             self.end_headers()
             try:
@@ -194,6 +201,16 @@ def make_server(app, port=8765):
                                  {"html": "text/html; charset=utf-8", "js": "text/javascript", "css": "text/css"}[name.rsplit(".", 1)[-1]])
             except Exception as exc:
                 self.send(400, {"error": str(exc)})
+
+        def do_OPTIONS(self):
+            if not self.trusted():
+                return self.send(403, {"error": "Local requests only"})
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", self.headers.get("Origin", "*"))
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.end_headers()
 
         def do_POST(self):
             if not self.trusted():
