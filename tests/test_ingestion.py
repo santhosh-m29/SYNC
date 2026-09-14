@@ -14,6 +14,8 @@ def test_scanner_finds_supported_files_recursively_and_skips_other_files(tmp_pat
     (tmp_path / "cover.jpg").write_bytes(b"not audio")
     (tmp_path / ".ai_dj_cache").mkdir()
     (tmp_path / ".ai_dj_cache" / "entry.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".ai_dj_stems" / "track").mkdir(parents=True)
+    write_click_track(tmp_path / ".ai_dj_stems" / "track" / "vocals.wav")
 
     result = scan_audio_library(tmp_path)
 

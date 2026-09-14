@@ -8,7 +8,7 @@ from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 SUPPORTED_EXTENSIONS = frozenset({".mp3", ".wav", ".flac"})
-GENERATED_DIRECTORY_NAMES = frozenset({".ai_dj_cache", ".ai_dj_analysis"})
+GENERATED_DIRECTORY_NAMES = frozenset({".ai_dj_cache", ".ai_dj_analysis", ".ai_dj_stems", ".ai_dj_waveforms"})
 
 
 class AudioDirectoryNotFoundError(FileNotFoundError):

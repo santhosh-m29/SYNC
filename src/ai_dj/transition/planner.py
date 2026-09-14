@@ -38,7 +38,8 @@ class _CandidatePoint:
 
 
 def find_best_transitions(
-    source: TrackAnalysis, destination: TrackAnalysis, *, include_rejected: bool = False
+    source: TrackAnalysis, destination: TrackAnalysis, *, include_rejected: bool = False,
+    search_durations: bool = False,
 ) -> list[TransitionPlan]:
     """Return valid source-exit × destination-entry candidates in ranked order."""
     pair = score_track_pair(source, destination)
@@ -50,7 +51,9 @@ def find_best_transitions(
             duration = _duration_for(source, destination, exit_point.timestamp, entry_point.timestamp)
             if duration is None:
                 continue
-            plans.append(_plan(source, destination, pair, exit_point, entry_point, duration))
+            durations = [d for d in _DURATIONS if d <= duration] if search_durations else [duration]
+            for candidate_duration in durations:
+                plans.append(_plan(source, destination, pair, exit_point, entry_point, candidate_duration))
     ranked = sorted(
         plans,
         key=lambda plan: (-plan.overall_score, -plan.confidence, -plan.duration, plan.source_exit, plan.destination_entry),
@@ -77,33 +80,44 @@ def find_best_transition(source: TrackAnalysis, destination: TrackAnalysis) -> T
 def _exit_points(track: TrackAnalysis) -> tuple[_CandidatePoint, ...]:
     points: dict[float, _CandidatePoint] = {}
     latest_start = track.duration - _MIN_DURATION
-    # A transition starts at an existing phrase/section/bar boundary; exits are
-    # biased toward the latter half without assuming an actual outro exists.
+    # Search the full analysed structure, but keep a meaningful early exit range
+    # available. Ranking below prefers a completed musical block over the final
+    # repetition, so this is not a fixed timestamp rule.
     for phrase in track.structure.phrases:
-        _add_point(points, phrase.start, "phrase", phrase.confidence, track.duration, lower=track.duration * 0.35, upper=latest_start)
+        _add_point(points, phrase.start, "phrase", phrase.confidence, track.duration, lower=track.duration * 0.25, upper=latest_start)
     for section in track.structure.sections:
-        _add_point(points, section.start, "section", section.confidence, track.duration, lower=track.duration * 0.5, upper=latest_start)
+        # Exiting at the end of an analysed section preserves the complete hook
+        # or verse; section starts remain useful as incoming entry points.
+        _add_point(points, section.end, "section", section.confidence, track.duration, lower=track.duration * 0.30, upper=latest_start)
     for bar in track.structure.bars:
-        _add_point(points, bar.start, "bar", bar.confidence, track.duration, lower=track.duration * 0.6, upper=latest_start)
+        _add_point(points, bar.start, "bar", bar.confidence, track.duration, lower=track.duration * 0.35, upper=latest_start)
     for timestamp in track.downbeats.timestamps:
-        _add_point(points, timestamp, "downbeat", track.downbeats.confidence, track.duration, lower=track.duration * 0.7, upper=latest_start)
-    return tuple(points[key] for key in sorted(points))
+        _add_point(points, timestamp, "downbeat", track.downbeats.confidence, track.duration, lower=track.duration * 0.40, upper=latest_start)
+    return _cap_points(tuple(points[key] for key in sorted(points)))
 
 
 def _entry_points(track: TrackAnalysis) -> tuple[_CandidatePoint, ...]:
     points: dict[float, _CandidatePoint] = {}
     latest_start = track.duration - _MIN_DURATION
-    # Early phrase/downbeat candidates stand in for an intro only when the
-    # analysis supports them; no artificial zero-second candidate is invented.
+    # Entry points may be later sections: a strong instrumental/buildup or hook
+    # can be a better musical entrance than an arbitrary 0:00 intro.
     for phrase in track.structure.phrases:
-        _add_point(points, phrase.start, "phrase", phrase.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.4, latest_start))
+        _add_point(points, phrase.start, "phrase", phrase.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.80, latest_start))
     for section in track.structure.sections:
-        _add_point(points, section.start, "section", section.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.4, latest_start))
+        _add_point(points, section.start, "section", section.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.80, latest_start))
     for bar in track.structure.bars:
-        _add_point(points, bar.start, "bar", bar.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.25, latest_start))
+        _add_point(points, bar.start, "bar", bar.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.65, latest_start))
     for timestamp in track.downbeats.timestamps:
-        _add_point(points, timestamp, "downbeat", track.downbeats.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.2, latest_start))
-    return tuple(points[key] for key in sorted(points))
+        _add_point(points, timestamp, "downbeat", track.downbeats.confidence, track.duration, lower=0.0, upper=min(track.duration * 0.55, latest_start))
+    return _cap_points(tuple(points[key] for key in sorted(points)))
+
+
+def _cap_points(points: tuple[_CandidatePoint, ...], limit: int = 16) -> tuple[_CandidatePoint, ...]:
+    """Keep the search bounded while preserving the whole musical timeline."""
+    if len(points) <= limit:
+        return points
+    indices = np.linspace(0, len(points) - 1, limit, dtype=int)
+    return tuple(points[int(index)] for index in sorted(set(indices)))
 
 
 def _add_point(
@@ -176,6 +190,14 @@ def _plan(
         if effective_weight > 0
         else 0.5
     )
+    # Prefer a completed musical block in the main body over the final repeat.
+    # This is a soft ranking term; a weak early boundary still loses to a strong
+    # later phrase when the compatibility evidence warrants it.
+    exit_fraction = exit_point.timestamp / max(source.duration, 1e-9)
+    if 0.40 <= exit_fraction <= 0.78:
+        overall += 0.045
+    elif exit_fraction > 0.88:
+        overall -= 0.08 * (exit_fraction - 0.88) / 0.12
     vocal = next(component for component in components if component.name == "vocals")
     provisional = TransitionPlan(
         source_track_id=source.track_id,

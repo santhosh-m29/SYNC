@@ -101,7 +101,7 @@ class VocalActivityEstimate:
             segments=tuple(VocalActivity.from_dict(item) for item in value["segments"]),
             available=bool(value["available"]),
             method=str(value["method"]),
-            confidence=float(value.get("confidence", 1.0 if value.get("available") else 0.0)),
+            confidence=float(value.get("confidence", 0.0)),
         )
 
     def probability_at(self, timestamp: float) -> float:

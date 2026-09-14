@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SYNC — Live DJ</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><h1>SYNC<span>LIVE DJ</span></h1><div class="header-right"><span id="connection">Connecting</span><button id="add">+ Add Music</button><input id="files" type="file" accept=".mp3,.wav,.flac" multiple hidden></div></header>
+<main>
+<section class="player" aria-label="Player">
+ <div class="song"><div class="eyebrow">NOW PLAYING</div><h2 id="now-title">Your session starts here</h2><p id="now-file">Audio plays through this computer’s output</p></div>
+ <div class="transport"><button id="previous" title="Previous track" aria-label="Previous track">Ⅰ◀</button><button id="play" class="primary" aria-label="Play">▶</button><button id="next" title="Next track" aria-label="Next track">▶Ⅰ</button><button id="stop" title="Stop" aria-label="Stop">■</button></div>
+ <label class="volume">VOL <input id="volume" aria-label="Volume" type="range" min="0" max="1" step=".01" value="1"></label>
+ <div class="seek"><time id="elapsed">00:00</time><input id="seek" aria-label="Seek current track" type="range" min="0" max="1" step=".01" value="0"><time id="remaining">−00:00</time></div>
+</section>
+<section class="timeline-panel">
+ <div class="section-head"><div><h2>Live timeline</h2><span id="transition-status">Preparing session</span></div><div class="actions"><button id="reset" title="Clear manual cues and transition points">Reset cues</button><button id="auto" aria-pressed="true">AUTO DJ <span>● ON</span></button></div></div>
+ <div class="timeline-scroll"><canvas id="timeline" height="286" aria-label="Live session timeline. Drag EXIT to move the transition, CUE to move incoming cue, or a track label to move its start." tabindex="0"></canvas></div>
+ <div class="timeline-footer"><span id="timeline-hint">Drag EXIT or CUE to override · Drop tracks here to place them</span><label>VIEW <select id="timeline-zoom" aria-label="Timeline zoom"><option value="240">4 min</option><option value="120">2 min</option><option value="60">1 min</option><option value="600">10 min</option></select></label></div>
+ <div class="manual-fields"><label>OUT <input id="exit-time" type="number" min="0" step=".01" aria-label="Outgoing transition seconds"></label><label>IN <input id="entry-time" type="number" min="0" step=".01" aria-label="Incoming cue seconds"></label><span>seconds</span><button id="apply-transition">Apply points</button><button id="mix">Mix now</button></div>
+</section>
+<div class="bottom">
+<section class="library-panel"><div class="section-head"><h2>Library <span id="track-count" class="count">0</span></h2><input id="search" type="search" placeholder="Find a track" aria-label="Search library"></div><div class="columns"><span>TRACK / FILE</span><span>BPM · KEY</span><span>TIME</span><span></span></div><div id="library" class="track-list" aria-label="Music library"></div></section>
+<section class="queue-panel"><div class="section-head"><h2>Queue <span id="queue-count" class="count">0</span></h2><span class="muted">Drag to reorder</span></div><div id="queue" class="track-list" aria-label="Playback queue"></div></section>
+</div>
+<section class="cue-panel"><div class="section-head"><div><span class="eyebrow">CUE EDITOR</span><h2 id="cue-title">Select a track from your library</h2></div><div class="actions"><label>ZOOM <select id="cue-zoom" aria-label="Cue waveform zoom"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label><button id="queue-selected">+ Queue</button><button id="load-selected">Load track</button></div></div><canvas id="cue-wave" height="132" tabindex="0" aria-label="Selected audio waveform. Click to set cue. Arrow keys adjust cue by one tenth of a second."></canvas><div class="cue-footer"><span id="cue-note">Select only · Playback stays uninterrupted</span><div><label>CUE <input id="cue-time" type="number" min="0" step=".01" value="0" aria-label="Selected track cue seconds"></label><button id="set-cue">Set cue</button><button id="seek-cue">Seek playing deck</button></div></div></section>
+<footer><span id="message" role="status">Local audio · Live mixing</span><span>MP3 / WAV / FLAC</span></footer>
+</main><script src="/app.js"></script></body></html>

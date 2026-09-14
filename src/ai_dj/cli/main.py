@@ -18,6 +18,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ai_dj", description="Analyze a local music library.")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     commands = parser.add_subparsers(dest="command", required=True)
+    ui = commands.add_parser("ui", help="Open the local live DJ workstation.")
+    ui.add_argument("directory", nargs="?", type=Path, default=Path("music"))
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--sample-rate", type=int, default=44100)
+    ui.add_argument("--device", type=int, default=None)
+    ui.add_argument("--no-vocal-analysis", action="store_false", dest="vocal_stems", default=True)
+    play = commands.add_parser("play", help="Continuously mix the local library through one live audio stream.")
+    play.add_argument("directory", nargs="?", type=Path, default=Path("music"))
+    play.add_argument("--sample-rate", type=int, default=44100)
+    play.add_argument("--device", type=int, default=None)
+    play.add_argument("--vocal-stems", action="store_true", default=True, help="Analyze local Demucs vocal stems before playback (default).")
+    play.add_argument("--no-vocal-analysis", action="store_false", dest="vocal_stems", help="Skip optional separation; vocal safety remains unavailable.")
+    play.add_argument("--memory-limit-mb", type=int, default=1024)
     analyze = commands.add_parser("analyze", help="Scan, analyze, and cache supported audio files.")
     analyze.add_argument("directory", type=Path, help="Music directory to scan recursively.")
     analyze.add_argument("--cache-dir", type=Path, help="Directory for reusable cache entries.")
@@ -44,6 +57,28 @@ def configure_logging(level: str) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.log_level)
+    if args.command == "ui":
+        from ai_dj.ui.server import serve
+        serve(args.directory, args.port, args.sample_rate, args.device, args.vocal_stems)
+        return 0
+    if args.command == "play":
+        from ai_dj.playback.engine import PlaybackEngine
+        import time
+        try:
+            with PlaybackEngine.from_library(args.directory, sample_rate=args.sample_rate,
+                    memory_limit_mb=args.memory_limit_mb, vocal_stems=args.vocal_stems) as engine:
+                engine.play()
+                engine.start_output(args.device)
+                logging.getLogger(__name__).info("Live playback started; Ctrl+C to stop. Controls are available through PlaybackEngine.")
+                while not engine.closed.wait(.5):
+                    if engine.state["errors"]:
+                        logging.getLogger(__name__).warning("Engine: %s", engine.state["errors"][-1])
+                return 1
+        except KeyboardInterrupt:
+            return 0
+        except (ValueError, RuntimeError, OSError, ImportError) as error:
+            logging.getLogger(__name__).error("Playback failed: %s", error)
+            return 2
     if args.command == "generate":
         try:
             result = generate_dj_set(
