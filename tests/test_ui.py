@@ -120,7 +120,9 @@ def test_http_rejects_foreign_origin_and_dispatches_controls():
         thread.join()
 
 
-def test_upload_keeps_audio_bytes_and_requests_analysis(tmp_path):
+def test_upload_keeps_audio_bytes_and_requests_analysis(tmp_path, monkeypatch):
+    origin = "https://sync-test.vercel.app"
+    monkeypatch.setenv("SYNC_FRONTEND_ORIGINS", origin)
     class App:
         directory = tmp_path
         imported_path = None
@@ -135,8 +137,14 @@ def test_upload_keeps_audio_bytes_and_requests_analysis(tmp_path):
     payload = source.read_bytes()
     url = f"http://127.0.0.1:{server.server_port}/api/upload"
     try:
-        with urlopen(Request(url, data=payload, headers={"X-Filename": "import.wav"})) as response:
+        with urlopen(Request(url, method="OPTIONS", headers={"Origin": origin,
+                            "Access-Control-Request-Method": "POST",
+                            "Access-Control-Request-Headers": "content-type,x-filename"})) as response:
+            assert response.status == 204
+            assert response.headers["Access-Control-Allow-Origin"] == origin
+        with urlopen(Request(url, data=payload, headers={"X-Filename": "import.wav", "Origin": origin})) as response:
             assert response.status == 202
+            assert response.headers["Access-Control-Allow-Origin"] == origin
         assert app.imported_path.read_bytes() == payload
         # Import must never replace an existing song.
         with pytest.raises(HTTPError):

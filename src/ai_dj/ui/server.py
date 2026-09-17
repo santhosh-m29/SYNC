@@ -6,6 +6,7 @@ from threading import Thread, Lock
 from urllib.parse import urlsplit, unquote
 import hashlib
 import json
+import os
 import mimetypes
 import time
 
@@ -151,6 +152,8 @@ class Workstation:
 
 def make_server(app, port=8765):
     static = Path(__file__).with_name("static")
+    allowed_origins = {origin.strip().rstrip('/') for origin in os.environ.get(
+        "SYNC_FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(',') if origin.strip()}
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -165,10 +168,9 @@ def make_server(app, port=8765):
             # The API remains loopback-only by Host, while allowing the separately
             # deployed frontend to read state from the user's own engine.
             origin = self.headers.get("Origin")
-            if origin:
+            if origin and self.trusted():
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
-                self.send_header("Access-Control-Allow-Credentials", "false")
             self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
             self.end_headers()
             try:
@@ -180,7 +182,8 @@ def make_server(app, port=8765):
             expected = f"127.0.0.1:{self.server.server_port}"
             host = self.headers.get("Host", "")
             origin = self.headers.get("Origin")
-            return host in (expected, f"localhost:{self.server.server_port}") and (not origin or origin == f"http://{host}")
+            return host in (expected, f"localhost:{self.server.server_port}") and (
+                not origin or origin == f"http://{host}" or origin in allowed_origins)
 
         def do_GET(self):
             if not self.trusted():

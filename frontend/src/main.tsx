@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 
@@ -8,12 +8,34 @@ const endpoint = import.meta.env.VITE_ENGINE_URL || 'http://127.0.0.1:8765';
 const time = (v:number) => `${String(Math.floor(Math.max(0,v)/60)).padStart(2,'0')}:${String(Math.floor(Math.max(0,v)%60)).padStart(2,'0')}`;
 async function api(path:string, init?:RequestInit){const response=await fetch(`${endpoint}${path}`,init);const data=await response.json();if(!response.ok)throw Error(data.error||'Engine request failed');return data;}
 function App(){
+ const fileInput = useRef<HTMLInputElement>(null);
+ const [uploading,setUploading]=useState(false), [importNotice,setImportNotice]=useState('');
+ const [imports,setImports]=useState<{filename:string;status:string}[]>([]);
+ async function importSongs(files: File[]) {
+  if (!files.length) return;
+  setUploading(true);
+  const results: string[] = [];
+  for (const file of files) {
+   if (!/\.(mp3|wav|flac)$/i.test(file.name)) { results.push(`${file.name}: choose MP3, WAV or FLAC.`); continue; }
+   if (!file.size || file.size > 250*1024*1024) { results.push(`${file.name}: file must be nonempty and under 250 MB.`); continue; }
+   setImportNotice(`Uploading ${file.name}…`);
+   try {
+    await api('/api/upload', {method:'POST',headers:{'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(file.name)},body:file});
+    results.push(`${file.name}: uploaded for analysis.`);
+   } catch (error) {
+    results.push(`${file.name}: ${error instanceof TypeError ? 'Cannot reach the local engine. Start python -m ai_dj ui and allow this website to connect to localhost.' : error instanceof Error ? error.message : 'Import failed.'}`);
+   }
+  }
+  setImportNotice(results.join(' '));
+  setUploading(false);
+ }
  const [tracks,setTracks]=useState<Track[]>([]), [state,setState]=useState<EngineState|null>(null), [selected,setSelected]=useState<string>(), [wave,setWave]=useState<number[]>([]), [notice,setNotice]=useState('Connecting to local DJ engine…');
  const byId=(id?:string)=>tracks.find(t=>t.id===id); const send=(action:string, data:Record<string,unknown>={})=>api('/api/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...data})}).catch(e=>setNotice(e.message));
- useEffect(()=>{let live=true;const poll=async()=>{try{const [library, snapshot]=await Promise.all([api('/api/library'),api('/api/state')]);if(!live)return;setTracks(library);setState(snapshot.state);setNotice(snapshot.ready?'Local engine connected':'Local engine unavailable');if(!selected&&library[0])setSelected(library[0].id);}catch{if(live){setState(null);setNotice('Local DJ engine unavailable — run `python -m ai_dj ui` on the playback computer.');}}};poll();const timer=setInterval(poll,250);return()=>{live=false;clearInterval(timer)}},[selected]);
+ useEffect(()=>{let live=true;const poll=async()=>{try{const [library, snapshot]=await Promise.all([api('/api/library'),api('/api/state')]);if(!live)return;setTracks(library);setState(snapshot.state);setImports(snapshot.imports||[]);setNotice(snapshot.ready?'Local engine connected':'Local engine unavailable');if(!selected&&library[0])setSelected(library[0].id);}catch{if(live){setState(null);setNotice('Local DJ engine unavailable — run `python -m ai_dj ui` on the playback computer.');}}};poll();const timer=setInterval(poll,250);return()=>{live=false;clearInterval(timer)}},[selected]);
  useEffect(()=>{if(!selected)return;api(`/api/waveform/${encodeURIComponent(selected)}`).then(d=>{if(d.peaks)setWave(d.peaks)}).catch(()=>setWave([]))},[selected]);
  const current=byId(state?.current_track), cue=byId(selected); return <main>
-  <header><h1>SYNC <small>LIVE DJ</small></h1><span className={state?'connected':''}>● {notice}</span></header>
+  <header><h1>SYNC <small>LIVE DJ</small></h1><div className="header-actions"><span className={state?'connected':''}>● {notice}</span><button className="add-songs" disabled={uploading} onClick={()=>fileInput.current?.click()}>{uploading?'Importing…':'+ Add Songs'}</button><input ref={fileInput} type="file" accept=".mp3,.wav,.flac" multiple hidden aria-label="Import songs" onChange={e=>{const files=Array.from(e.currentTarget.files||[]);e.currentTarget.value='';void importSongs(files);}}/></div></header>
+  <div className="import-status" role="status" aria-live="polite">{importNotice}{imports.length>0&&<ul>{imports.slice(-5).map((item,i)=><li key={`${item.filename}-${i}`}>{item.filename} — {item.status==='Ready'?'Ready in Library. Select the track, Load track, then Play.':item.status}</li>)}</ul>}{!tracks.length&&<p>Add MP3, WAV or FLAC songs to get started. Imports are saved to your local engine’s music library.</p>}</div>
   <section className="player"><div><label>NOW PLAYING</label><h2>{current?.title||'No local engine connected'}</h2><p>{current?.filename||'The web UI never accesses music files directly.'}</p></div><div className="transport"><button onClick={()=>send('previous')}>Ⅰ◀</button><button className="play" onClick={()=>send(state?.playing?'pause':'play')}>{state?.playing?'Ⅱ':'▶'}</button><button onClick={()=>send('next')}>▶Ⅰ</button><button onClick={()=>send('stop')}>■</button></div><label className="volume">VOL <input type="range" min="0" max="1" step=".01" value={state?.volume??1} onChange={e=>send('volume',{value:+e.target.value})}/></label><div className="seek"><time>{time(state?.position||0)}</time><input type="range" min="0" max={current?.duration||1} step=".01" value={state?.position||0} onChange={e=>send('seek',{seconds:+e.target.value})}/><time>−{time((current?.duration||0)-(state?.position||0))}</time></div></section>
   <section className="timeline"><div className="section-title"><h2>Live timeline</h2><span>{state?.event?`${state.event.strategy.startsWith('manual_')?'MANUAL':'AUTO'} · EXIT ${time(state.event.outgoing_transition_timestamp)} · CUE ${time(state.event.incoming_start_timestamp)}`:'Preparing next deck'}</span><button onClick={()=>state&&send('auto',{enabled:!state.auto_dj})}>AUTO DJ · {state?.auto_dj?'ON':'OFF'}</button></div><div className="lane"><div className="bar current" style={{width:`${Math.max(18,100*(1-(state?.position||0)/(current?.duration||1)))}%`}}>{current?.title||'Current track'}</div><div className="bar incoming" style={{width:`${Math.max(15,100*((state?.event?.transition_duration||2)/(current?.duration||120)))}%`}}>{byId(state?.event?.next_track)?.title||'Incoming track'}</div><i style={{left:`${Math.min(99,100*(state?.position||0)/(current?.duration||1))}%`}}/></div></section>
   <div className="columns"><section><div className="section-title"><h2>Library <small>{tracks.length}</small></h2></div>{tracks.map(t=><button className={`row ${selected===t.id?'selected':''}`} key={t.id} onClick={()=>setSelected(t.id)}><b>{t.title}</b><span>{t.bpm} · {t.key||'—'}</span><time>{time(t.duration)}</time><em onClick={e=>{e.stopPropagation();send('queue',{tracks:[...(state?.queue_order||[]).filter(id=>id!==t.id),t.id]})}}>+</em></button>)}</section><section><div className="section-title"><h2>Queue <small>{state?.queue_order.length||0}</small></h2></div>{(state?.queue_order||[]).map((id,i)=><div className={`row queue ${id===state?.current_track?'selected':''}`} key={id}><small>{String(i).padStart(2,'0')}</small><b>{byId(id)?.title||id}</b><button onClick={()=>send('next',{track:id})}>▶</button></div>)}</section></div>
