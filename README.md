@@ -27,9 +27,9 @@ render or modify audio.
 The overall score is the confidence-weighted mean of these `[0, 1]` components:
 tempo (0.25), harmony (0.20), rhythm (0.15), energy (0.15), structure (0.10),
 vocal activity (0.05), and timbre (0.10). A component's effective weight is its
-base weight multiplied by its analysis confidence. Unavailable evidence—for
-example the current unimplemented local vocal detector—has zero effective
-weight rather than being treated as certainty.
+base weight multiplied by its analysis confidence. Unavailable evidence—such as
+vocal activity from an ordinary mixed waveform—has zero effective weight rather
+than being treated as certainty.
 
 ## Installation
 
@@ -42,6 +42,120 @@ python -m pip install -e ".[dev]"
 MP3 decoding depends on the local audio backend. Installing FFmpeg is recommended
 for broadest codec support, although WAV and FLAC are supported through
 SoundFile where the platform backend supports them.
+
+## How the AI/DSP engine works
+
+SYNC's production path is an explainable audio-analysis and scheduling system.
+The live engine does not currently use a trained neural network to decide what a
+DJ should play. It uses deterministic DSP features, confidence values, and
+rule-based candidate search. The optional transition-quality model is an offline
+experiment and is not allowed to override the live planner's safety checks.
+
+For each MP3, WAV, or FLAC file, ingestion scans the library and decodes a mono
+analysis signal with a consistent sample rate. The analyzer then builds one
+versioned `TrackAnalysis` record containing:
+
+- tempo: librosa onset strength and tempo estimation, normalized to a plausible
+  40–240 BPM range while retaining half/double-time alternatives and periodicity
+  confidence;
+- beats: beat timestamps from the onset envelope, with confidence based on beat
+  regularity and onset strength;
+- downbeats and bars: a confidence-scored 3/4 or 4/4 accent-phase heuristic;
+- energy: normalized RMS level plus a coarse one-second energy timeline;
+- key: a preliminary chroma-template estimate using major/minor pitch profiles;
+- timbre: spectral centroid, bandwidth, rolloff, spectral contrast, and MFCC
+  summaries;
+- structure: bar-aligned phrases, non-semantic section boundaries, section
+  confidence, and repetition IDs from normalized chroma/MFCC/energy similarity;
+- vocal activity: unavailable for ordinary mixed audio unless optional Demucs
+  separation produces cached vocal and accompaniment stems.
+
+These descriptors are estimates, not musical truth. Structure labels are kept as
+`other`; the analyzer does not claim that a boundary is definitely a verse,
+chorus, or bridge. Every feature that can be uncertain carries confidence so
+missing or weak evidence reduces its influence rather than becoming a fabricated
+prediction.
+
+Analysis is cached using the source identity, file size, modification time, and
+analysis version. A repeated scan reuses valid `TrackAnalysis` JSON instead of
+decoding and analyzing the entire library again. Failed files are isolated from
+successful files. The cache is metadata and analysis; original music is not
+modified.
+
+### How a transition is selected
+
+The transition system evaluates a directed pair `current → candidate`, not just a
+playlist order. It first scores broad compatibility using confidence-weighted
+tempo, harmony, rhythm, energy, structure, vocal, and timbre components. Tempo
+supports practical half/double-time relationships; harmony compares tonic/mode
+relationships; rhythm compares beat density and inferred meter; energy compares
+both global levels and the source exit/candidate entry levels.
+
+For each compatible pair, the transition planner searches multiple source exit
+and destination entry windows. It prefers phrase, bar, beat/downbeat, section,
+repetition, instrumental, and energy boundaries. Each possible window is checked
+for valid duration, available audio, beat alignment, tempo correction, and vocal
+activity. The result is a ranked `TransitionPlan` with an exit timestamp, entry
+timestamp, duration, strategy, confidence, component reasons, vocal-safety state,
+and any bounded beat offset. A candidate with no feasible window is rejected.
+
+The live `PlaybackEngine` uses that plan on two resident decks. It prepares the
+incoming audio off the callback path, schedules both decks on a media/sample
+clock, and applies a short equal-power fade. The incoming deck begins at its
+selected cue rather than assuming 00:00. The outgoing deck leaves at the selected
+musical boundary rather than waiting for the file's final sample. The queue and
+planner maintain a ten-track lookahead; after five completed songs, another
+window is prepared. Seek, reorder, cue, and manual exit changes invalidate future
+plans and rebuild them without changing the active audio callback.
+
+The planner is vocal-aware only when it has trusted separated-stem evidence. It
+rejects sustained significant vocal-vocal overlap in normal automatic playback,
+but uncertain or unavailable vocal data cannot certify safety. The Demucs path
+uses RMS activity, absolute/relative floors, attack context, hysteresis, and
+release on the separated vocal stem. Its indicators are explicitly uncalibrated
+and confidence-limited; they are not a claim of perfect singing detection.
+
+### Set planning, rendering, and optional ML
+
+`set_planning` performs deterministic bounded beam search over eligible future
+transitions. It can follow build, maintain, release, or peak energy trajectories,
+avoid repeats, discourage recent artist repetition, and apply a small diversity
+penalty. Its fixed objective is 65% transition score, 20% trajectory fit, and 15%
+variety.
+
+`rendering` is an evaluation/preview path. It executes an already-selected plan,
+pitch-preserving-stretches within the permitted correction range, applies bounded
+RMS gain matching and peak protection, and writes a float WAV preview. Rendering
+does not select tracks and is not used to generate live transition clips.
+
+The optional `transition_quality` model is a
+`HistGradientBoostingRegressor` trained on versioned transition features. The
+dataset pipeline writes deterministic train/validation/test JSONL splits and
+supports group-safe splits and human/consensus annotations. Automatically
+generated weak labels come from the deterministic plan score, so they cannot
+prove that ML is better than that baseline. The evaluator reports MAE, RMSE,
+Pearson correlation, ranking metrics, and diagnostic guardrails. A model is only
+appropriate for live use after diverse, leakage-safe, human-labeled holdout
+evaluation; until then the live system remains deterministic.
+
+### Runtime data flow
+
+```text
+music/ → scanner/loader → DSP analysis → AnalysisCache
+                         ↓
+             compatibility + transition search
+                         ↓
+               queue / ten-track lookahead
+                         ↓
+       two-deck preparation → sample-clock mixer → output device
+```
+
+The callback only copies already-prepared PCM and applies scheduled gains. It
+does not perform analysis, file I/O, model inference, logging, or blocking work.
+Planning runs in a separate process and tempo preparation in a worker, so a slow
+analysis job cannot intentionally insert silence into the active stream. Python
+audio on a general-purpose operating system remains soft real time: OS/device
+stalls can still cause underruns, which are counted and reported.
 
 ## Analyze a library
 
