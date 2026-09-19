@@ -1,0 +1,19 @@
+{
+  "name": "SYNC — Live DJ",
+  "short_name": "SYNC",
+  "description": "Live AI DJ that syncs music to your session in real time.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101112",
+  "theme_color": "#101112",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    {
+      "src": "/sync.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
