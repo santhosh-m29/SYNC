@@ -41,6 +41,7 @@ tests_tmp/
 # Generated output
 output/
 data/cache/
+data/cloud/
 data/analysis/
 data/datasets/
 data/annotations/

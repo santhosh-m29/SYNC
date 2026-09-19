@@ -1,0 +1,10 @@
+.git
+.venv
+music
+output
+tests_tmp
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/.env*
+data

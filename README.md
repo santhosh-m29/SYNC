@@ -1,5 +1,11 @@
 # AI DJ (SYNC)
 
+The `frontend/` is now a standalone browser DJ: select files from your own device,
+analyze and mix locally with Web Audio. No uploads, accounts, persistent storage
+or Python service are required for the website. See [frontend deployment and
+analysis limits](frontend/README.md). The native Python engine below remains a
+separate optional application.
+
 SYNC is a local audio-analysis and live DJ playback engine. It scans a music
 directory, caches rhythmic, harmonic, energy and structure analysis, and mixes
 two decks through one buffered audio stream. Queue and playback controls are
